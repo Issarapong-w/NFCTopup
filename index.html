@@ -10,6 +10,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- QR Code Generator -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     
     <style>
         /* Custom Loader */
@@ -76,6 +78,10 @@
             <button onclick="switchTab('pos')" id="nav-pos" class="nav-btn w-full flex items-center gap-3 px-3 py-4 rounded-xl bg-blue-600 text-white transition-colors">
                 <i data-lucide="calculator" class="w-6 h-6"></i>
                 <span class="font-medium hidden md:block">Point of Sale</span>
+            </button>
+            <button onclick="switchTab('customer')" id="nav-customer" class="nav-btn w-full flex items-center gap-3 px-3 py-4 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
+                <i data-lucide="user-square-2" class="w-6 h-6"></i>
+                <span class="font-medium hidden md:block">Customer Portal</span>
             </button>
             <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-btn w-full flex items-center gap-3 px-3 py-4 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
                 <i data-lucide="users" class="w-6 h-6"></i>
@@ -344,10 +350,12 @@
 
         // State Management
         let isProcessingPOS = false; // Flag to prevent multiple POS transactions
+        let currentPaymentQR = null;
         let adminData = {
             users: [],
             transactions: []
         };
+        let currentCustomer = null;
         let myChart = null;
 
         // Formatter
@@ -388,7 +396,7 @@
         // Navigation
         function switchTab(tabId) {
             // Update buttons
-            ['pos', 'dashboard', 'analytics'].forEach(id => {
+            ['pos', 'customer', 'dashboard', 'analytics'].forEach(id => {
                 const btn = document.getElementById(`nav-${id}`);
                 const view = document.getElementById(`view-${id}`);
                 
@@ -537,12 +545,20 @@
                 showToast("Please enter a valid amount", "error"); return;
             }
 
+            // ยืนยันตัวตน Staff สำหรับรายการ Top-up
+            let staff_pin = null;
+            if (action === 'topup') {
+                staff_pin = prompt("Security Check: กรุณากรอก Staff PIN เพื่อยืนยันการเติมเงิน");
+                if (staff_pin === null) return; // ผู้ใช้กดยกเลิก (Cancel)
+                if (!staff_pin.trim()) { showToast("จำเป็นต้องระบุ Staff PIN", "error"); return; }
+            }
+
             const ref_id = `TXN_${Date.now()}_${Math.random().toString(36).substring(2,7)}`;
             isProcessingPOS = true;
             togglePOSButtons(true); // Disable buttons
             
             try {
-                const res = await apiCall({ action, uid, amount, ref_id });
+                const res = await apiCall({ action, uid, amount, ref_id, staff_pin });
                 
                 // Update POS UI
                 const iconDiv = document.getElementById('pos-status-icon');
