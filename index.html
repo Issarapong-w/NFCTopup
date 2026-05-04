@@ -12,6 +12,8 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- QR Code Generator -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- QR Code Scanner -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
     
     <style>
         /* Custom Loader */
@@ -132,7 +134,6 @@
 
                     <!-- Actions -->
                     <div class="grid grid-cols-2 gap-4 mb-4">
-                        <button id="btn-deduct" onclick="handlePOS('deduct')" class="col-span-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-200 transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-lg">
                         <button id="btn-deduct" onclick="handlePOS('deduct')" class="col-span-2 bg-slate-900 hover:bg-slate-800 text-white font-bold py-4 rounded-xl shadow-lg shadow-slate-200 transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-lg">
                             <i data-lucide="shopping-cart"></i> Pay / Deduct
                         </button>
@@ -394,6 +395,7 @@
         // State Management
         let isProcessingPOS = false; // Flag to prevent multiple POS transactions
         let currentPaymentQR = null;
+        let html5QrCode = null;
         let adminData = {
             users: [],
             transactions: []
@@ -508,6 +510,57 @@
             if (deductBtn) deductBtn.disabled = disabled;
             if (topupBtn) topupBtn.disabled = disabled;
             if (checkBtn) checkBtn.disabled = disabled;
+        }
+
+        // ========================
+        // QR SCANNER LOGIC
+        // ========================
+        async function toggleQRScanner() {
+            const readerDiv = document.getElementById('qr-reader');
+            const scannerText = document.getElementById('scanner-text');
+            
+            if (html5QrCode) {
+                await stopQRScanner();
+                return;
+            }
+
+            readerDiv.classList.remove('hidden');
+            scannerText.innerText = "Stop Scanning";
+            
+            html5QrCode = new Html5Qrcode("qr-reader");
+            const qrCodeSuccessCallback = (decodedText) => {
+                try {
+                    const data = JSON.parse(decodedText);
+                    if (data.type === 'pay') {
+                        currentPaymentQR = data;
+                        document.getElementById('pending-amount').innerText = formatCurrency(data.amount);
+                        document.getElementById('pending-payment-info').classList.remove('hidden');
+                        showToast(`QR Scanned: ${formatCurrency(data.amount)}`, "success");
+                        stopQRScanner();
+                        lucide.createIcons();
+                    }
+                } catch (e) {
+                    console.warn("QR not a valid JSON", decodedText);
+                }
+            };
+
+            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+            try {
+                await html5QrCode.start({ facingMode: "environment" }, config, qrCodeSuccessCallback);
+            } catch (err) {
+                showToast("Unable to start camera", "error");
+                readerDiv.classList.add('hidden');
+                scannerText.innerText = "Scan Payment QR";
+            }
+        }
+
+        async function stopQRScanner() {
+            if (html5QrCode) {
+                try { await html5QrCode.stop(); } catch (e) {}
+                html5QrCode = null;
+            }
+            document.getElementById('qr-reader').classList.add('hidden');
+            document.getElementById('scanner-text').innerText = "Scan Payment QR";
         }
 
         // New: Web NFC Scanning Logic
